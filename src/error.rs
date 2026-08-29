@@ -1,5 +1,7 @@
 // crate-wide error enum (thiserror or hand-rolled)
 
+use std::fs;
+
 pub type Result<T> = std::result::Result<T, LeetCodeError>;
 
 #[derive(thiserror::Error, Debug)]
@@ -10,11 +12,17 @@ pub enum LeetCodeError {
     #[error("failed to parse JSON: {0}")]
     Json(#[from] serde_json::Error),
 
-    #[error("failed to parse TOML: {0}")]
-    Toml(#[from] toml::de::Error),
+    #[error("failed to deserialize TOML: {0}")]
+    TomlDeserialize(#[from] toml::de::Error),
+
+    #[error("failed to serialize TOML: {0}")]
+    TomlSerialize(#[from] toml::ser::Error),
 
     #[error("failed to find config dir")]
     ConfigDir,
+
+    #[error("failed to enact IO: {0}")]
+    IO(#[from] std::io::Error),
 
     /* Status Error Series */
     // 401/403
