@@ -8,6 +8,9 @@ use crate::error::Result;
 use serde::Deserialize;
 use serde_json::Value;
 
+/*
+ * ========== QUESTION MODEL ==========
+ */
 #[derive(PartialEq, Eq, Deserialize, Debug)]
 pub enum Difficulty {
     Easy,
@@ -71,6 +74,170 @@ impl Question {
 
     pub fn lang_snippet(&self, lang: &LangSlug) -> Option<&CodeSnippet> {
         self.code_snippets.iter().find(|s| s.lang_slug == *lang)
+    }
+}
+
+/*
+ * ========== SUBMISSION STATUS MODEL ==========
+ */
+
+/// raw shape of LeetCode's `/submissions/detail/<id>/check/` response.
+/// field presence verified against real submissions: 2026-08-29
+#[derive(Deserialize)]
+pub struct SubmissionStatus {
+    status_code: u8,                    // present in all 7 confirmed outcomes
+    lang: LangSlug,                     // present in all 7
+    run_success: bool,                  // present in all 7
+    status_runtime: String,             // present in all 7
+    memory: u32,                        // present in all 7
+    display_runtime: Option<String>,    // present only in: Accepted, WrongAnswer
+    question_id: String,                // present in all 7
+    elapsed_time: Option<u16>,          // present in all except: CompileError
+    compare_result: Option<String>,     // present in all except: CompileError
+    code_output: Option<String>,        // present in all except: CompileError
+    std_output: Option<String>,         // present in all except: CompileError
+    last_testcase: Option<String>,      // present in all except: CompileError
+    expected_output: Option<String>,    // present in all except: CompileError
+    compile_error: Option<String>,      // present only in: CompileError
+    full_compile_error: Option<String>, // present only in: CompileError
+    runtime_error: Option<String>,      // present only in: RuntimeError
+    full_runtime_error: Option<String>, // present only in: RuntimeError
+    input: Option<String>,              // present only in: WrongAnswer
+    input_formatted: Option<String>,    // present only in: WrongAnswer
+    task_finish_time: u64,              // present in all 7
+    task_name: String,                  // present in all 7
+    finished: bool,                     // present in all 7
+    total_correct: Option<u16>,         // key present in all except: CompileError (null there)
+    total_testcases: Option<u16>,       // key present in all except: CompileError (null there)
+    runtime_percentile: Option<f32>,    // non-null only in: Accepted
+    status_memory: String,              // present in all 7
+    memory_percentile: Option<f32>,     // non-null only in: Accepted
+    pretty_lang: String,                // present in all 7
+    submission_id: String,              // present in all 7
+    status_msg: String,                 // present in all 7
+    state: String,                      // present in all 7
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SubmissionStatusCode {
+    Accepted,
+    WrongAnswer,
+    MemoryLimitExceeded,
+    OutputLimitExceeded,
+    TimeLimitExceeded,
+    RuntimeError,
+    CompileError,
+    Unknown(i64, String),
+}
+
+impl From<i64> for SubmissionStatusCode {
+    fn from(code: i64) -> Self {
+        match code {
+            10 => Self::Accepted,
+            11 => Self::WrongAnswer,
+            12 => Self::MemoryLimitExceeded,
+            13 => Self::OutputLimitExceeded,
+            14 => Self::TimeLimitExceeded,
+            15 => Self::RuntimeError,
+            20 => Self::CompileError,
+            other => Self::Unknown(other, String::new()),
+        }
+    }
+}
+
+/// domain-level result-- each variant only carries the
+/// fields that are actually meaningful for that outcome.
+pub enum SubmissionResult {
+    Accepted {
+        runtime_percentile: f32,
+        memory_percentile: f32,
+        total_correct: u16,
+        total_testcases: u16,
+    },
+    WrongAnswer {
+        compare_result: String,
+        code_output: String,
+        last_testcase: String,
+        expected_output: String,
+        total_correct: u16,
+        total_testcases: u16,
+    },
+    MemoryLimitExceeded {
+        last_testcase: String,
+        expected_output: String,
+    },
+    OutputLimitExceeded {
+        last_testcase: String,
+        expected_output: String,
+    },
+    TimeLimitExceeded {
+        last_testcase: String,
+        expected_output: String,
+    },
+    RuntimeError {
+        runtime_error: String,
+        full_runtime_error: String,
+        last_testcase: String,
+        expected_output: String,
+    },
+    CompileError {
+        compile_error: String,
+        full_compile_error: String,
+    },
+    Unknown(i64, String),
+}
+
+macro_rules! req {
+    ($s:expr, $field:ident, $variant:literal) => {
+        $s.$field.expect(concat!(
+            stringify!($field),
+            " always present when status_code is ",
+            $variant
+        ))
+    };
+}
+
+impl From<SubmissionStatus> for SubmissionResult {
+    fn from(s: SubmissionStatus) -> Self {
+        match s.status_code {
+            10 => SubmissionResult::Accepted {
+                runtime_percentile: req!(s, runtime_percentile, "Accepted"),
+                memory_percentile: req!(s, memory_percentile, "Accepted"),
+                total_correct: req!(s, total_correct, "Accepted"),
+                total_testcases: req!(s, total_testcases, "Accepted"),
+            },
+            11 => SubmissionResult::WrongAnswer {
+                compare_result: req!(s, compare_result, "WrongAnswer"),
+                code_output: req!(s, code_output, "WrongAnswer"),
+                last_testcase: req!(s, last_testcase, "WrongAnswer"),
+                expected_output: req!(s, expected_output, "WrongAnswer"),
+                total_correct: req!(s, total_correct, "WrongAnswer"),
+                total_testcases: req!(s, total_testcases, "WrongAnswer"),
+            },
+            12 => SubmissionResult::MemoryLimitExceeded {
+                last_testcase: req!(s, last_testcase, "MemoryLimitExceeded"),
+                expected_output: req!(s, expected_output, "MemoryLimitExceeded"),
+            },
+            13 => SubmissionResult::OutputLimitExceeded {
+                last_testcase: req!(s, last_testcase, "OutputLimitExceeded"),
+                expected_output: req!(s, expected_output, "OutputLimitExceeded"),
+            },
+            14 => SubmissionResult::TimeLimitExceeded {
+                last_testcase: req!(s, last_testcase, "TimeLimitExceeded"),
+                expected_output: req!(s, expected_output, "TimeLimitExceeded"),
+            },
+            15 => SubmissionResult::RuntimeError {
+                runtime_error: req!(s, runtime_error, "RuntimeError"),
+                full_runtime_error: req!(s, full_runtime_error, "RuntimeError"),
+                last_testcase: req!(s, last_testcase, "RuntimeError"),
+                expected_output: req!(s, expected_output, "RuntimeError"),
+            },
+            20 => SubmissionResult::CompileError {
+                compile_error: req!(s, compile_error, "CompileError"),
+                full_compile_error: req!(s, full_compile_error, "CompileError"),
+            },
+            other => SubmissionResult::Unknown(other as i64, s.status_msg),
+        }
     }
 }
 
