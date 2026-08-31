@@ -4,7 +4,7 @@
 /*
  * Production Code
  */
-use crate::error::Result;
+use crate::error::{LeetCodeError, Result};
 use serde::Deserialize;
 use serde_json::Value;
 
@@ -42,7 +42,7 @@ pub enum LangSlug {
     Racket,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct CodeSnippet {
     pub lang: String,
@@ -50,7 +50,7 @@ pub struct CodeSnippet {
     pub code: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct Question {
     pub question_id: String,
@@ -64,12 +64,18 @@ pub struct Question {
 }
 
 impl Question {
-    pub fn from_graphql_payload(json_str: &str) -> Result<Self> {
-        let root: Value = serde_json::from_str(json_str)?;
-        let question_json = root["data"]["question"].clone();
-        let question: Question = serde_json::from_value(question_json)?;
+    pub fn from_graphql_value(root: &Value, slug: &str) -> Result<Self> {
+        let question_json = root
+            .get("data")
+            .and_then(|d| d.get("question"))
+            .filter(|q| !q.is_null())
+            .ok_or_else(|| LeetCodeError::ProblemNotFound(slug.to_string()))?;
+        Ok(serde_json::from_value(question_json.clone())?)
+    }
 
-        Ok(question)
+    pub fn from_graphql_payload(json_str: &str, slug: &str) -> Result<Self> {
+        let root: Value = serde_json::from_str(json_str)?;
+        Self::from_graphql_value(&root, slug)
     }
 
     pub fn lang_snippet(&self, lang: &LangSlug) -> Option<&CodeSnippet> {
@@ -260,7 +266,7 @@ mod tests {
                 let json_payload =
                     include_str!("../test_data/response_samples/two_sum_response.json");
 
-                let question = Question::from_graphql_payload(json_payload)?;
+                let question = Question::from_graphql_payload(json_payload, "two-sum")?;
                 assert_eq!(question.question_frontend_id, "1");
                 assert_eq!(question.title, "Two Sum");
                 assert_eq!(question.difficulty, Difficulty::Easy);
@@ -269,7 +275,6 @@ mod tests {
                     .lang_snippet(&LangSlug::Rust)
                     .expect("Expected to find a Rust snippet in the parsed payload");
 
-                // verify various parts of the snippet contents
                 assert_eq!(snippet.lang, "Rust");
                 assert_eq!(snippet.lang_slug, LangSlug::Rust);
                 assert!(snippet.code.contains("impl Solution"));
@@ -282,9 +287,9 @@ mod tests {
             fn returns_none_for_missing_language() -> Result<()> {
                 let json_payload =
                     include_str!("../test_data/response_samples/two_sum_response.json");
-                let _ = Question::from_graphql_payload(json_payload)?;
+                let _ = Question::from_graphql_payload(json_payload, "two-sum")?;
 
-                // tests that a lanuage not included in the output does not crash the system
+                // tests that a language not included in the output does not crash the system
                 // possible on newer problems that don't yet support niche languages
 
                 Ok(())
@@ -292,9 +297,8 @@ mod tests {
 
             #[test]
             fn fails_on_malformed_json_syntax() {
-                // pass a completely broken JSON string
                 let bad_json = "{ this is not valid json";
-                let result = Question::from_graphql_payload(bad_json);
+                let result = Question::from_graphql_payload(bad_json, "two-sum");
 
                 // asserts that the first `?` operator correctly caught the error
                 assert!(result.is_err(), "Expected an error for malformed JSON");
@@ -302,7 +306,9 @@ mod tests {
 
             #[test]
             fn fails_on_missing_required_fields() {
-                // pass valid JSON that lacks the required Question fields
+                // present, non-null "question" object missing required fields --
+                // exercises the serde_json::from_value failure, not the
+                // ProblemNotFound/.filter(is_null) path
                 let bad_schema_json = r#"{
                     "data": {
                         "question": {
@@ -310,13 +316,28 @@ mod tests {
                         }
                     }
                 }"#;
-                let result = Question::from_graphql_payload(bad_schema_json);
+                let result = Question::from_graphql_payload(bad_schema_json, "two-sum");
 
-                // asserts that the second `?` operator (serde_json::from_value) caught the missing fields
                 assert!(
                     result.is_err(),
                     "Expected an error for missing Question struct fields"
                 );
+            }
+
+            #[test]
+            fn fails_with_problem_not_found_when_question_is_null() {
+                // this is the case .filter(|q| !q.is_null()) exists for --
+                // worth its own test since it's a distinct code path from
+                // both malformed JSON and missing-fields
+                let null_question_json = r#"{ "data": { "question": null } }"#;
+                let result = Question::from_graphql_payload(null_question_json, "fake-slug");
+
+                match result {
+                    Err(LeetCodeError::ProblemNotFound(slug)) => {
+                        assert_eq!(slug, "fake-slug");
+                    }
+                    other => panic!("expected ProblemNotFound, got {other:?}"),
+                }
             }
         }
     }

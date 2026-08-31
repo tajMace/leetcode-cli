@@ -1,4 +1,4 @@
-// load/save LEETCODE_SESSION + csrftoken from ~/.config/leetcode-cli/config.toml
+// load/save LEETCODE_SESSION + csrftoken from ~/.config/lt-cli/config.toml
 
 use std::{fs, path::PathBuf};
 
