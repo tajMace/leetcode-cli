@@ -6,6 +6,7 @@ pub type Result<T> = std::result::Result<T, LeetCodeError>;
 
 #[derive(thiserror::Error, Debug)]
 pub enum LeetCodeError {
+    /* Package related errors */
     #[error("network request failed: {0}")]
     Request(#[from] reqwest::Error),
 
@@ -18,11 +19,15 @@ pub enum LeetCodeError {
     #[error("failed to serialize TOML: {0}")]
     TomlSerialize(#[from] toml::ser::Error),
 
+    #[error("failed to enact IO: {0}")]
+    IO(#[from] std::io::Error),
+
+    /* Handrolled Errors */
     #[error("failed to find config dir")]
     ConfigDir,
 
-    #[error("failed to enact IO: {0}")]
-    IO(#[from] std::io::Error),
+    #[error("problem already pulled: use 'pull <slug> --force' for a hard reset")]
+    AlreadyPulled(String),
 
     /* Status Error Series */
     // 401/403

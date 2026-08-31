@@ -8,6 +8,7 @@ mod client;
 mod commands;
 mod config;
 mod error;
+mod manifest;
 mod models;
 
 fn main() {
