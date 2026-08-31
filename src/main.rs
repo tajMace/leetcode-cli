@@ -14,5 +14,14 @@ mod models;
 fn main() {
     let cli = Cli::parse();
 
-    println!("{:?}", &cli);
+    let result = match cli.command {
+        cli::Command::Pull { slug, lang } => commands::pull(slug, lang),
+        cli::Command::Test { slug } => Ok(println!("{slug}")),
+        cli::Command::Submit { slug } => Ok(println!("{slug}")),
+    };
+
+    if let Err(e) = result {
+        eprintln!("error: {e}");
+        std::process::exit(1);
+    }
 }

@@ -1,6 +1,8 @@
 // response types: Problem, CodeSnippet, SubmissionStatus (enum + match),
 // designed after the shape the GraphQL/REST responses return
 
+use std::fmt;
+
 /*
  * Production Code
  */
@@ -9,16 +11,9 @@ use serde::Deserialize;
 use serde_json::Value;
 
 /*
- * ========== QUESTION MODEL ==========
+ * ========== LangSlug Model ==========
  */
-#[derive(PartialEq, Eq, Deserialize, Debug)]
-pub enum Difficulty {
-    Easy,
-    Medium,
-    Hard,
-}
-
-#[derive(PartialEq, Eq, Deserialize, Debug)]
+#[derive(PartialEq, Eq, Deserialize, Debug, Clone, clap::ValueEnum)]
 #[serde(rename_all = "lowercase")]
 pub enum LangSlug {
     Cpp,
@@ -42,14 +37,67 @@ pub enum LangSlug {
     Racket,
 }
 
-#[derive(Deserialize, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct CodeSnippet {
-    pub lang: String,
-    pub lang_slug: LangSlug,
-    pub code: String,
+impl LangSlug {
+    /// File extension to use when writing a solution file to disk.
+    pub fn file_extension(&self) -> &'static str {
+        match self {
+            LangSlug::Cpp => "cpp",
+            LangSlug::Java => "java",
+            LangSlug::Python3 | LangSlug::Python => "py",
+            LangSlug::JavaScript => "js",
+            LangSlug::TypeScript => "ts",
+            LangSlug::CSharp => "cs",
+            LangSlug::C => "c",
+            LangSlug::Golang => "go",
+            LangSlug::Kotlin => "kt",
+            LangSlug::Swift => "swift",
+            LangSlug::Rust => "rs",
+            LangSlug::Ruby => "rb",
+            LangSlug::Php => "php",
+            LangSlug::Dart => "dart",
+            LangSlug::Scala => "scala",
+            LangSlug::Elixir => "ex",
+            LangSlug::Erlang => "erl",
+            LangSlug::Racket => "rkt",
+        }
+    }
+
+    /// Lowercase wire-format name,exposed directly for cases
+    /// (like error messages) that need the string without going through serde.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            LangSlug::Cpp => "cpp",
+            LangSlug::Java => "java",
+            LangSlug::Python3 => "python3",
+            LangSlug::Python => "python",
+            LangSlug::JavaScript => "javascript",
+            LangSlug::TypeScript => "typescript",
+            LangSlug::CSharp => "csharp",
+            LangSlug::C => "c",
+            LangSlug::Golang => "golang",
+            LangSlug::Kotlin => "kotlin",
+            LangSlug::Swift => "swift",
+            LangSlug::Rust => "rust",
+            LangSlug::Ruby => "ruby",
+            LangSlug::Php => "php",
+            LangSlug::Dart => "dart",
+            LangSlug::Scala => "scala",
+            LangSlug::Elixir => "elixir",
+            LangSlug::Erlang => "erlang",
+            LangSlug::Racket => "racket",
+        }
+    }
 }
 
+impl fmt::Display for LangSlug {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.as_str())
+    }
+}
+
+/*
+ * ========== QUESTION MODEL ==========
+ */
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct Question {
@@ -80,6 +128,53 @@ impl Question {
 
     pub fn lang_snippet(&self, lang: &LangSlug) -> Option<&CodeSnippet> {
         self.code_snippets.iter().find(|s| s.lang_slug == *lang)
+    }
+
+    pub fn generate_problem_file(&self, lang: &LangSlug) -> Result<String> {
+        let snippet = self
+            .lang_snippet(lang)
+            .ok_or_else(|| LeetCodeError::UnsupportedLanguage(lang.as_str().to_string()))?;
+
+        Ok(format!(
+            "// {title} ({difficulty})\n\
+             // https://leetcode.com/problems/{slug}/\n\
+             // question_id: {question_id}\n\n\
+             {code}\n\n",
+            title = self.title,
+            difficulty = self.difficulty,
+            slug = self.title_slug,
+            question_id = self.question_id,
+            code = snippet.code,
+        ))
+    }
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct CodeSnippet {
+    pub lang: String,
+    pub lang_slug: LangSlug,
+    pub code: String,
+}
+
+/*
+ * ========== Difficulty Model ==========
+ */
+#[derive(PartialEq, Eq, Deserialize, Debug)]
+pub enum Difficulty {
+    Easy,
+    Medium,
+    Hard,
+}
+
+impl fmt::Display for Difficulty {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let text = match self {
+            Difficulty::Easy => "Easy",
+            Difficulty::Medium => "Medium",
+            Difficulty::Hard => "Hard",
+        };
+        write!(f, "{text}")
     }
 }
 

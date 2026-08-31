@@ -29,6 +29,9 @@ pub enum LeetCodeError {
     #[error("problem already pulled: use 'pull <slug> --force' for a hard reset")]
     AlreadyPulled(String),
 
+    #[error("problem does not have a solution snippet for language: {0}")]
+    UnsupportedLanguage(String),
+
     /* Status Error Series */
     // 401/403
     #[error("failed to authenticate token")]

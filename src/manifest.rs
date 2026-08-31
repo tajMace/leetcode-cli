@@ -4,23 +4,17 @@
 use crate::error::Result;
 use std::fs;
 
-pub enum PullOutcome {
-    NewEntry,
-    AlreadyExisted,
-}
-
-pub fn add_bin_entry(file_stem: &str, slug: &str) -> Result<PullOutcome> {
+pub fn add_bin_entry(slug: &str) -> Result<()> {
+    let file_stem = slug.replace('-', "_");
     let mut doc: toml::Table = get_cargo_toml_contents()?;
     let bin_array = get_or_create_bin_array(&mut doc);
 
-    if bin_entry_exists(bin_array, file_stem) {
-        return Ok(PullOutcome::AlreadyExisted);
+    if !bin_entry_exists(bin_array, &file_stem) {
+        insert_to_bin_array(bin_array, &file_stem, slug);
+        fs::write("Cargo.toml", toml::to_string(&doc)?)?;
     }
 
-    insert_to_bin_array(bin_array, file_stem, slug);
-    fs::write("Cargo.toml", toml::to_string(&doc)?)?;
-
-    Ok(PullOutcome::NewEntry)
+    Ok(())
 }
 
 /* ========== LOCAL HELPERS ========== */
@@ -51,7 +45,7 @@ fn insert_to_bin_array(bin_array: &mut Vec<toml::Value>, file_stem: &str, slug: 
     );
     new_entry.insert(
         "path".to_string(),
-        toml::Value::String(format!("src/problems/{slug}/rust.rs")),
+        toml::Value::String(format!("src/problems/{slug}/q.rs")),
     );
     bin_array.push(toml::Value::Table(new_entry));
 }

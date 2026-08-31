@@ -2,8 +2,6 @@
 // (unauthenticated: fetch problem) and the REST run/submit/check endpoints
 // (authenticated: needs the session cookie from config.rs)
 
-use reqwest::blocking::Request;
-
 use crate::config::Config;
 use crate::error::{LeetCodeError, Result};
 use crate::models::Question;

@@ -1,17 +1,25 @@
-// fetch a problem, write its starter code to src/problems/<slug>/<lang>.<fe>
+// fetch a problem, write its starter code to src/problems/<slug>/q.<fe>
 
-use crate::error::Result;
+use std::fs;
 
-pub fn pull(slug: String) -> Result<()> {
-    // check if directory exists for slug; if so early return
+use crate::{client::LeetCodeClient, error::Result, manifest::add_bin_entry, models::LangSlug};
 
-    // create web client; if error, return error
+pub fn pull(slug: String, lang: LangSlug) -> Result<()> {
+    let dirpath = format!("src/problems/{slug}");
+    let filepath = format!("{dirpath}/q.{ext}", ext = lang.file_extension());
 
-    // pull question from slug; if error, return error
+    if fs::exists(&filepath)? {
+        return Ok(());
+    };
 
-    // create directory and file -> normalise slug to snake_case; if error, return error
+    let client = LeetCodeClient::new()?;
+    let problem = client.fetch_problem(&slug)?;
 
-    // write header, supplied stub, empty fn main{} and empty testing block for additional tests; if error, return error
+    fs::create_dir_all(&dirpath)?;
+    fs::write(&filepath, problem.generate_problem_file(&lang)?)?;
+    if lang == LangSlug::Rust {
+        add_bin_entry(&slug)?;
+    }
 
     Ok(())
 }

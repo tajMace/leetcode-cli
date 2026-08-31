@@ -2,11 +2,21 @@
 
 use clap::{Parser, Subcommand};
 
+use crate::models::LangSlug;
+
 #[derive(Debug, Subcommand)]
 pub enum Command {
-    Pull { slug: String },
-    Test { slug: String },
-    Submit { slug: String },
+    Pull {
+        slug: String,
+        #[arg(long, value_enum)]
+        lang: LangSlug,
+    },
+    Test {
+        slug: String,
+    },
+    Submit {
+        slug: String,
+    },
 }
 
 #[derive(Debug, Parser)]
