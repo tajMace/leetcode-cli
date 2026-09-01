@@ -13,6 +13,8 @@ pub enum Command {
     },
     Test {
         slug: String,
+        #[arg(long, value_enum)]
+        lang: LangSlug,
     },
     Submit {
         slug: String,

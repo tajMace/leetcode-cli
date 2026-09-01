@@ -32,7 +32,7 @@ pub enum LeetCodeError {
     #[error("problem does not have a solution snippet for language: {0}")]
     UnsupportedLanguage(String),
 
-    #[error("Took too long waiting for for testcases to complete")]
+    #[error("Took too long waiting for testcases to complete")]
     TestingTooLong,
 
     /* Status Error Series */

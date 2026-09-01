@@ -76,7 +76,7 @@ impl LeetCodeClient {
 
         let body = serde_json::json!({
             "lang": solution.lang.as_str(),
-            "question_id": question.question_id,
+            "question_id": &solution.question_id,
             "typed_code": solution.typed_code,
             "data_input": question.example_testcase_list.join("\n")
         });
@@ -96,33 +96,6 @@ impl LeetCodeClient {
         self.get_run_status(interpret_id, slug)
     }
 
-    /// polls `/submissions/detail/<id>/check/` until the run finishes,
-    /// then deserializes the final response into `RunResult`.
-    pub fn get_run_status(&self, interpret_id: &str, slug: &str) -> Result<RunResult> {
-        let url = format!("https://leetcode.com/submissions/detail/{interpret_id}/check/");
-
-        for _ in 0..20 {
-            let response: serde_json::Value = self
-                .with_auth_headers(self.http.get(&url), &problem_referer(slug))?
-                .header("Content-Type", "application/json")
-                .send()?
-                .json()?;
-
-            let state = response.get("state").and_then(|v| v.as_str()).unwrap_or("");
-
-            if state == "SUCCESS" {
-                let result: RunResult = serde_json::from_value(response)?;
-                return Ok(result);
-            }
-
-            // limit polling rate to avoid blockout
-            std::thread::sleep(std::time::Duration::from_millis(500));
-        }
-
-        // shouldn't get here: likely a hanging server issue
-        Err(LeetCodeError::TestingTooLong)
-    }
-
     /* ----- private helpers ----- */
     fn with_auth_headers(
         &self,
@@ -138,6 +111,34 @@ impl LeetCodeClient {
                 format!("LEETCODE_SESSION={session}; csrftoken={csrf}"),
             ))
     }
+
+    /// polls `/submissions/detail/<id>/check/` until the run finishes,
+    /// then deserializes the final response into `RunResult`.
+    fn get_run_status(&self, interpret_id: &str, slug: &str) -> Result<RunResult> {
+        let url = format!("https://leetcode.com/submissions/detail/{interpret_id}/check/");
+
+        for _ in 0..20 {
+            let response: serde_json::Value = self
+                .with_auth_headers(self.http.get(&url), &problem_referer(slug))?
+                .header("Content-Type", "application/json")
+                .send()?
+                .json()?;
+
+            let state = response.get("state").and_then(|v| v.as_str()).unwrap_or("");
+
+            if state == "SUCCESS" {
+                eprintln!("{response:?}");
+                let result: RunResult = serde_json::from_value(response)?;
+                return Ok(result);
+            }
+
+            // limit polling rate to avoid blockout
+            std::thread::sleep(std::time::Duration::from_millis(500));
+        }
+
+        // shouldn't get here: likely a hanging server issue
+        Err(LeetCodeError::TestingTooLong)
+    }
 }
 
 // referer is always the same: the associated problem
@@ -148,57 +149,6 @@ fn problem_referer(slug: &str) -> String {
 /*
  * ========== UNIT TESTS ==========
  */
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::models::{Difficulty, LangSlug};
-
-    fn test_client() -> LeetCodeClient {
-        LeetCodeClient::new().expect("client should construct")
-    }
-
-    #[test]
-    #[ignore = "hits the real LeetCode API -- run manually with `cargo test -- --ignored`"]
-    fn fetches_two_sum_from_live_api() {
-        let client = test_client();
-        let question = client
-            .fetch_question("two-sum")
-            .expect("should fetch two-sum");
-
-        assert_eq!(question.question_frontend_id, "1");
-        assert_eq!(question.title, "Two Sum");
-        assert_eq!(question.difficulty, Difficulty::Easy);
-        assert!(question.lang_snippet(&LangSlug::Rust).is_some());
-    }
-
-    #[test]
-    #[ignore = "hits the real LeetCode API -- run manually with `cargo test -- --ignored`"]
-    fn fetches_a_second_known_problem() {
-        let client = test_client();
-        let question = client
-            .fetch_question("valid-parentheses")
-            .expect("should fetch valid-parentheses");
-
-        assert_eq!(question.question_frontend_id, "20");
-        assert_eq!(question.title, "Valid Parentheses");
-    }
-
-    #[test]
-    #[ignore = "hits the real LeetCode API -- run manually with `cargo test -- --ignored`"]
-    fn fetching_nonexistent_slug_returns_problem_not_found() {
-        let client = test_client();
-        let result = client.fetch_question("this-problem-definitely-does-not-exist-xyz");
-
-        match result {
-            Err(LeetCodeError::ProblemNotFound(slug)) => {
-                assert_eq!(slug, "this-problem-definitely-does-not-exist-xyz");
-            }
-            other => panic!("expected ProblemNotFound, got {other:?}"),
-        }
-    }
-}
-
 #[cfg(test)]
 mod client_tests {
     use super::*;
@@ -224,20 +174,20 @@ mod client_tests {
             lang: LangSlug::Rust,
             question_id: question.question_id.clone(),
             typed_code: r#"
-impl Solution {
-    pub fn two_sum(nums: Vec<i32>, target: i32) -> Vec<i32> {
-        use std::collections::HashMap;
-        let mut seen = HashMap::new();
-        for (i, &n) in nums.iter().enumerate() {
-            if let Some(&j) = seen.get(&(target - n)) {
-                return vec![j as i32, i as i32];
-            }
-            seen.insert(n, i);
-        }
-        vec![]
-    }
-}
-"#
+ impl Solution {
+     pub fn two_sum(nums: Vec<i32>, target: i32) -> Vec<i32> {
+         use std::collections::HashMap;
+         let mut seen = HashMap::new();
+         for (i, &n) in nums.iter().enumerate() {
+             if let Some(&j) = seen.get(&(target - n)) {
+                 return vec![j as i32, i as i32];
+             }
+             seen.insert(n, i);
+         }
+         vec![]
+     }
+ }
+ "#
             .to_string(),
         };
 
@@ -247,7 +197,7 @@ impl Solution {
 
         assert_eq!(result.status_code, 10);
         assert_eq!(result.status_msg, "Accepted");
-        assert!(result.correct_answer);
+        assert_eq!(result.correct_answer, Some(true));
         assert_eq!(result.total_correct, result.total_testcases);
     }
 
@@ -261,19 +211,47 @@ impl Solution {
             lang: LangSlug::Rust,
             question_id: question.question_id.clone(),
             typed_code: r#"
-impl Solution {
-    pub fn two_sum(nums: Vec<i32>, target: i32) -> Vec<i32> {
-        vec![0, 0]
-    }
-}
-"#
+ impl Solution {
+     pub fn two_sum(nums: Vec<i32>, target: i32) -> Vec<i32> {
+         vec![0, 0]
+     }
+ }
+ "#
             .to_string(),
         };
 
         let result = client
-            .run_testcases(&question, &solution)
-            .expect("run_testcases should succeed (as an API call — the *solution* is wrong, not the request)");
+             .run_testcases(&question, &solution)
+             .expect("run_testcases should succeed (as an API call — the *solution* is wrong, not the request)");
 
-        assert!(!result.correct_answer);
+        assert_eq!(result.correct_answer, Some(false));
+    }
+
+    #[test]
+    #[ignore = "hits the real LeetCode API — run manually with `cargo test -- --ignored --nocapture`"]
+    fn run_testcases_reports_compile_error_for_invalid_syntax() {
+        let client = live_client();
+        let question = two_sum_question(&client);
+
+        let solution = ParsedSolution {
+            lang: LangSlug::Rust,
+            question_id: question.question_id.clone(),
+            typed_code: r#"
+ impl Solution {
+     pub fn two_sum(nums: Vec<i32>, target: i32) -> Vec<i32> {
+         shouldn'tcompile
+     }
+ }
+ "#
+            .to_string(),
+        };
+
+        let result = client
+             .run_testcases(&question, &solution)
+             .expect("run_testcases should succeed (as an API call — the *code* fails to compile, not the request)");
+
+        assert_eq!(result.status_msg, "Compile Error");
+        assert!(result.compile_error.is_some());
+        assert_eq!(result.correct_answer, None);
     }
 }

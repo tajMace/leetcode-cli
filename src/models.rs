@@ -330,7 +330,7 @@ impl From<SubmissionStatus> for SubmissionResult {
 
 #[derive(Deserialize, Debug)]
 pub struct RunResult {
-    // overall run info
+    // overall run info — present in all 3 confirmed outcomes
     pub status_code: u8,
     pub status_msg: String,
     pub state: String,
@@ -340,37 +340,44 @@ pub struct RunResult {
     pub memory: u32,
     pub status_memory: String,
     pub status_runtime: String,
-    pub elapsed_time: u32,
-    pub total_correct: Option<u32>,
-    pub total_testcases: Option<u32>,
-    pub runtime_percentile: Option<f32>,
-    pub memory_percentile: Option<f32>,
     pub submission_id: String,
     pub task_finish_time: u64,
     pub task_name: String,
 
-    // per-testcase results
-    pub code_answer: Vec<String>,
-    pub code_output: Vec<String>,
-    pub std_output_list: Vec<String>,
-    pub compare_result: String,
-    pub correct_answer: bool,
-
-    // expected per-testcase results, for comparison
-    pub expected_code_answer: Vec<String>,
-    pub expected_code_output: Vec<String>,
-    pub expected_std_output_list: Vec<String>,
-    pub expected_lang: String,
-    pub expected_run_success: bool,
-    pub expected_status_code: u8,
-    pub expected_status_runtime: String,
-    pub expected_display_runtime: String,
-    pub expected_elapsed_time: u32,
-    pub expected_memory: u32,
-    pub expected_task_finish_time: u64,
-    pub expected_task_name: String,
-
+    // present in Accepted, WrongAnswer; absent in CompileError
+    pub elapsed_time: Option<u32>,
+    pub total_correct: Option<u32>,
+    pub total_testcases: Option<u32>,
     pub display_runtime: Option<String>,
+
+    // non-null only in Accepted
+    pub runtime_percentile: Option<f32>,
+    pub memory_percentile: Option<f32>,
+
+    // present (possibly empty) in Accepted/WrongAnswer; absent in CompileError
+    pub code_answer: Option<Vec<String>>,
+    pub code_output: Option<Vec<String>>,
+    pub std_output_list: Option<Vec<String>>,
+    pub compare_result: Option<String>,
+    pub correct_answer: Option<bool>,
+
+    // expected_* — same presence pattern as their non-expected counterparts
+    pub expected_code_answer: Option<Vec<String>>,
+    pub expected_code_output: Option<Vec<String>>,
+    pub expected_std_output_list: Option<Vec<String>>,
+    pub expected_lang: Option<String>,
+    pub expected_run_success: Option<bool>,
+    pub expected_status_code: Option<u8>,
+    pub expected_status_runtime: Option<String>,
+    pub expected_display_runtime: Option<String>,
+    pub expected_elapsed_time: Option<u32>,
+    pub expected_memory: Option<u32>,
+    pub expected_task_finish_time: Option<u64>,
+    pub expected_task_name: Option<String>,
+
+    // present only in CompileError
+    pub compile_error: Option<String>,
+    pub full_compile_error: Option<String>,
 }
 
 /*
