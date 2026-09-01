@@ -40,7 +40,7 @@ impl LeetCodeClient {
             .json()?)
     }
 
-    pub fn fetch_problem(&self, slug: &str) -> Result<Question> {
+    pub fn fetch_question(&self, slug: &str) -> Result<Question> {
         let query = "query fetchProblem($titleSlug: String!) {
           question(titleSlug: $titleSlug) {
             questionId
@@ -79,7 +79,7 @@ mod tests {
     fn fetches_two_sum_from_live_api() {
         let client = test_client();
         let question = client
-            .fetch_problem("two-sum")
+            .fetch_question("two-sum")
             .expect("should fetch two-sum");
 
         assert_eq!(question.question_frontend_id, "1");
@@ -93,7 +93,7 @@ mod tests {
     fn fetches_a_second_known_problem() {
         let client = test_client();
         let question = client
-            .fetch_problem("valid-parentheses")
+            .fetch_question("valid-parentheses")
             .expect("should fetch valid-parentheses");
 
         assert_eq!(question.question_frontend_id, "20");
@@ -104,7 +104,7 @@ mod tests {
     #[ignore = "hits the real LeetCode API -- run manually with `cargo test -- --ignored`"]
     fn fetching_nonexistent_slug_returns_problem_not_found() {
         let client = test_client();
-        let result = client.fetch_problem("this-problem-definitely-does-not-exist-xyz");
+        let result = client.fetch_question("this-problem-definitely-does-not-exist-xyz");
 
         match result {
             Err(LeetCodeError::ProblemNotFound(slug)) => {

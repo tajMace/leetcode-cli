@@ -1,4 +1,5 @@
 mod pull;
+mod solution_file;
 mod submit;
 mod test;
 

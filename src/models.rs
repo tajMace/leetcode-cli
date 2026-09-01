@@ -1,14 +1,12 @@
 // response types: Problem, CodeSnippet, SubmissionStatus (enum + match),
 // designed after the shape the GraphQL/REST responses return
 
-use std::fmt;
-
-/*
- * Production Code
- */
 use crate::error::{LeetCodeError, Result};
 use serde::Deserialize;
 use serde_json::Value;
+use std::fmt;
+
+pub const SOLUTION_MARKER: &str = "/* ---------- SOLUTION START ---------- */";
 
 /*
  * ========== LangSlug Model ==========
@@ -128,24 +126,6 @@ impl Question {
 
     pub fn lang_snippet(&self, lang: &LangSlug) -> Option<&CodeSnippet> {
         self.code_snippets.iter().find(|s| s.lang_slug == *lang)
-    }
-
-    pub fn generate_problem_file(&self, lang: &LangSlug) -> Result<String> {
-        let snippet = self
-            .lang_snippet(lang)
-            .ok_or_else(|| LeetCodeError::UnsupportedLanguage(lang.as_str().to_string()))?;
-
-        Ok(format!(
-            "// {title} ({difficulty})\n\
-             // https://leetcode.com/problems/{slug}/\n\
-             // question_id: {question_id}\n\n\
-             {code}\n\n",
-            title = self.title,
-            difficulty = self.difficulty,
-            slug = self.title_slug,
-            question_id = self.question_id,
-            code = snippet.code,
-        ))
     }
 }
 
