@@ -18,30 +18,30 @@ pub fn test(slug: &str, lang: &LangSlug) -> Result<()> {
     Ok(())
 }
 
+/*
+ * ========== UI STUFF ==========
+ */
+
 const RESET: &str = "\x1B[0m";
 const BOLD: &str = "\x1B[1m";
 const GREEN: &str = "\x1B[1;32m";
 const RED: &str = "\x1B[1;31m";
 const DIM: &str = "\x1B[2m";
 const CLEAR_SCREEN: &str = "\x1B[2J\x1B[1;1H";
+/* ---------- test (RunResult) ---------- */
 
-fn print_run_result(result: &RunResult) {
+pub fn print_run_result(result: &RunResult) {
     print!("{CLEAR_SCREEN}");
 
-    // check for compiler error first: don't contain the 'correct_answer' field
     if let Some(full_compile_error) = &result.full_compile_error {
-        println!("{RED}{BOLD}╔═══════════════════════════════════════╗{RESET}");
-        println!("{RED}{BOLD}║           ✗  COMPILE ERROR            ║{RESET}");
-        println!("{RED}{BOLD}╚═══════════════════════════════════════╝{RESET}");
+        print_banner("✗  COMPILE ERROR", RED);
         println!();
         println!("{full_compile_error}");
         return;
     }
 
     if result.correct_answer.unwrap_or(false) {
-        println!("{GREEN}{BOLD}╔═══════════════════════════════════════╗{RESET}");
-        println!("{GREEN}{BOLD}║              ✓  ACCEPTED              ║{RESET}");
-        println!("{GREEN}{BOLD}╚═══════════════════════════════════════╝{RESET}");
+        print_banner("✓  ACCEPTED", GREEN);
         println!();
         println!(
             "  {}/{} testcases passed",
@@ -61,9 +61,7 @@ fn print_run_result(result: &RunResult) {
         return;
     }
 
-    println!("{RED}{BOLD}╔═══════════════════════════════════════╗{RESET}");
-    println!("{RED}{BOLD}║               ✗  FAILED               ║{RESET}");
-    println!("{RED}{BOLD}╚═══════════════════════════════════════╝{RESET}");
+    print_banner("✗  FAILED", RED);
     println!();
     println!(
         "  {}/{} testcases passed",
@@ -87,11 +85,23 @@ fn print_run_result(result: &RunResult) {
                 .and_then(|v| v.get(i))
                 .map(String::as_str)
                 .unwrap_or("?");
-            println!("{DIM}  testcase {}:{RESET}", i + 1);
-            println!("    expected: {expected}");
-            println!("    got:      {got}");
+            print_testcase_diff(i, expected, got);
         }
     }
+}
+
+/* ---------- shared helpers ---------- */
+
+fn print_banner(label: &str, color: &str) {
+    let width = 41;
+    let padding = (width - 2 - label.chars().count()) / 2;
+    println!("{color}{BOLD}╔{}╗{RESET}", "═".repeat(width));
+    println!(
+        "{color}{BOLD}║{}{label}{}║{RESET}",
+        " ".repeat(padding),
+        " ".repeat(width - padding - label.chars().count()),
+    );
+    println!("{color}{BOLD}╚{}╝{RESET}", "═".repeat(width));
 }
 
 fn percentile_str(percentile: Option<f32>, comparison: &str) -> String {
@@ -99,4 +109,10 @@ fn percentile_str(percentile: Option<f32>, comparison: &str) -> String {
         Some(p) => format!("beats {p:.1}% of submissions on {comparison}"),
         None => "percentile unavailable".to_string(),
     }
+}
+
+fn print_testcase_diff(index: usize, expected: &str, got: &str) {
+    println!("{DIM}  testcase {}:{RESET}", index + 1);
+    println!("    expected: {expected}");
+    println!("    got:      {got}");
 }

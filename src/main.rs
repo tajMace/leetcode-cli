@@ -17,7 +17,7 @@ fn main() {
     let result = match cli.command {
         cli::Command::Pull { slug, lang } => commands::pull(slug, lang),
         cli::Command::Test { slug, lang } => commands::test(&slug, &lang),
-        cli::Command::Submit { slug } => Ok(println!("{slug}")),
+        cli::Command::Submit { slug, lang } => commands::submit(&slug, &lang),
     };
 
     if let Err(e) = result {
