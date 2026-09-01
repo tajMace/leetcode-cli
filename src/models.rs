@@ -234,6 +234,7 @@ impl From<i64> for SubmissionStatusCode {
 
 /// domain-level result-- each variant only carries the
 /// fields that are actually meaningful for that outcome.
+#[derive(Debug)]
 pub enum SubmissionResult {
     Accepted {
         runtime_percentile: f32,

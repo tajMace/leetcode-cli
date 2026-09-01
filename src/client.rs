@@ -5,7 +5,7 @@
 use crate::commands::ParsedSolution;
 use crate::config::Config;
 use crate::error::{LeetCodeError, Result};
-use crate::models::{Question, RunResult};
+use crate::models::{Question, RunResult, SubmissionResult, SubmissionStatus};
 
 const LEETCODE_GRAPHQL_ENDPOINT: &str = "https://leetcode.com/graphql/";
 const FETCH_QUESTION_QUERY: &str = "query fetchProblem($titleSlug: String!) {
@@ -71,9 +71,6 @@ impl LeetCodeClient {
         solution: &ParsedSolution,
     ) -> Result<RunResult> {
         let slug = &question.title_slug;
-        let referer = problem_referer(slug);
-        let url = format!("{referer}/interpret_solution/");
-
         let body = serde_json::json!({
             "lang": solution.lang.as_str(),
             "question_id": &solution.question_id,
@@ -81,19 +78,25 @@ impl LeetCodeClient {
             "data_input": question.example_testcase_list.join("\n")
         });
 
-        let response_text = self
-            .with_auth_headers(self.http.post(&url), &referer)?
-            .json(&body)
-            .send()?
-            .text()?;
+        let interpret_id = self.start_judge(slug, "interpret_solution", &body)?;
+        self.poll_until_judgement::<RunResult>(&interpret_id, slug)
+    }
 
-        let response_json: serde_json::Value = serde_json::from_str(&response_text)?;
-        let interpret_id = response_json
-            .get("interpret_id")
-            .and_then(|v| v.as_str())
-            .expect("response was not in the expected shape: possibly a bot check");
+    pub fn submit_solution(
+        &self,
+        question: &Question,
+        solution: &ParsedSolution,
+    ) -> Result<SubmissionResult> {
+        let slug = &question.title_slug;
+        let body = serde_json::json!({
+            "lang": solution.lang.as_str(),
+            "question_id": &solution.question_id,
+            "typed_code": solution.typed_code,
+        });
 
-        self.get_run_status(interpret_id, slug)
+        let submission_id = self.start_judge(slug, "submit", &body)?;
+        let status = self.poll_until_judgement::<SubmissionStatus>(&submission_id, slug)?;
+        Ok(status.into())
     }
 
     /* ----- private helpers ----- */
@@ -112,10 +115,34 @@ impl LeetCodeClient {
             ))
     }
 
+    fn start_judge(&self, slug: &str, path: &str, body: &serde_json::Value) -> Result<String> {
+        let referer = problem_referer(slug);
+        let url = format!("{referer}/{path}/");
+
+        let response_text = self
+            .with_auth_headers(self.http.post(&url), &referer)?
+            .json(body)
+            .send()?
+            .text()?;
+
+        let response_json: serde_json::Value = serde_json::from_str(&response_text)?;
+        let id_field = response_json
+            .get("interpret_id")
+            .or_else(|| response_json.get("submission_id"))
+            .and_then(value_to_id_string)
+            .expect("response was not in the expected shape: possibly a bot check");
+
+        Ok(id_field.to_string())
+    }
+
     /// polls `/submissions/detail/<id>/check/` until the run finishes,
     /// then deserializes the final response into `RunResult`.
-    fn get_run_status(&self, interpret_id: &str, slug: &str) -> Result<RunResult> {
-        let url = format!("https://leetcode.com/submissions/detail/{interpret_id}/check/");
+    fn poll_until_judgement<T: serde::de::DeserializeOwned>(
+        &self,
+        id: &str,
+        slug: &str,
+    ) -> Result<T> {
+        let url = format!("https://leetcode.com/submissions/detail/{id}/check/");
 
         for _ in 0..20 {
             let response: serde_json::Value = self
@@ -126,10 +153,9 @@ impl LeetCodeClient {
 
             let state = response.get("state").and_then(|v| v.as_str()).unwrap_or("");
 
+            // break when finished judging
             if state == "SUCCESS" {
-                eprintln!("{response:?}");
-                let result: RunResult = serde_json::from_value(response)?;
-                return Ok(result);
+                return Ok(serde_json::from_value(response)?);
             }
 
             // limit polling rate to avoid blockout
@@ -144,6 +170,16 @@ impl LeetCodeClient {
 // referer is always the same: the associated problem
 fn problem_referer(slug: &str) -> String {
     format!("https://leetcode.com/problems/{slug}")
+}
+
+fn value_to_id_string(value: &serde_json::Value) -> Option<String> {
+    if let Some(s) = value.as_str() {
+        return Some(s.to_string());
+    }
+    if let Some(n) = value.as_i64() {
+        return Some(n.to_string());
+    }
+    None
 }
 
 /*
@@ -253,5 +289,103 @@ mod client_tests {
         assert_eq!(result.status_msg, "Compile Error");
         assert!(result.compile_error.is_some());
         assert_eq!(result.correct_answer, None);
+    }
+}
+
+#[cfg(test)]
+mod submit_tests {
+    use super::*;
+    use crate::models::{LangSlug, SubmissionResult};
+
+    fn live_client() -> LeetCodeClient {
+        LeetCodeClient::new().expect("client should construct")
+    }
+
+    fn two_sum_question(client: &LeetCodeClient) -> Question {
+        client
+            .fetch_question("two-sum")
+            .expect("should fetch two-sum")
+    }
+
+    #[test]
+    #[ignore = "hits the real LeetCode API and records a real submission — run manually with `cargo test -- --ignored --nocapture`"]
+    fn submit_solution_reports_accepted_for_correct_solution() {
+        let client = live_client();
+        let question = two_sum_question(&client);
+
+        let solution = ParsedSolution {
+            lang: LangSlug::Rust,
+            question_id: question.question_id.clone(),
+            typed_code: r#"
+impl Solution {
+    pub fn two_sum(nums: Vec<i32>, target: i32) -> Vec<i32> {
+        use std::collections::HashMap;
+        let mut seen = HashMap::new();
+        for (i, &n) in nums.iter().enumerate() {
+            if let Some(&j) = seen.get(&(target - n)) {
+                return vec![j as i32, i as i32];
+            }
+            seen.insert(n, i);
+        }
+        vec![]
+    }
+}
+"#
+            .to_string(),
+        };
+
+        let result = client
+            .submit_solution(&question, &solution)
+            .expect("submit_solution should succeed");
+
+        match result {
+            SubmissionResult::Accepted {
+                total_correct,
+                total_testcases,
+                runtime_percentile,
+                memory_percentile,
+                ..
+            } => {
+                assert_eq!(total_correct, total_testcases);
+                assert!(
+                    runtime_percentile > 0.0,
+                    "expected a real runtime percentile, got {runtime_percentile}"
+                );
+                assert!(
+                    memory_percentile > 0.0,
+                    "expected a real memory percentile, got {memory_percentile}"
+                );
+            }
+            other => panic!("expected Accepted, got a different outcome: {other:?}"),
+        }
+    }
+
+    #[test]
+    #[ignore = "hits the real LeetCode API and records a real submission — run manually with `cargo test -- --ignored --nocapture`"]
+    fn submit_solution_reports_wrong_answer_for_bad_solution() {
+        let client = live_client();
+        let question = two_sum_question(&client);
+
+        let solution = ParsedSolution {
+            lang: LangSlug::Rust,
+            question_id: question.question_id.clone(),
+            typed_code: r#"
+impl Solution {
+    pub fn two_sum(nums: Vec<i32>, target: i32) -> Vec<i32> {
+        vec![0, 0]
+    }
+}
+"#
+            .to_string(),
+        };
+
+        let result = client
+            .submit_solution(&question, &solution)
+            .expect("submit_solution should succeed (as an API call — the *solution* is wrong, not the request)");
+
+        match result {
+            SubmissionResult::WrongAnswer { .. } => {}
+            other => panic!("expected WrongAnswer, got a different outcome: {other:?}"),
+        }
     }
 }
