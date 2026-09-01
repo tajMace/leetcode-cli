@@ -32,19 +32,21 @@ pub fn generate_problem_file(question: &Question, lang: &LangSlug) -> Result<Str
  */
 pub struct ParsedSolution {
     pub question_id: String,
-    pub code: String,
+    pub lang: LangSlug,
+    pub typed_code: String,
 }
 
 pub fn read_and_parse_solution_file(slug: &str, lang: &LangSlug) -> Result<ParsedSolution> {
     let filepath = get_challenge_filepath(slug, lang);
     let contents = fs::read_to_string(filepath)?;
-    Ok(parse_solution_file(&contents))
+    Ok(parse_solution_file(&contents, lang))
 }
 
-fn parse_solution_file(contents: &str) -> ParsedSolution {
+fn parse_solution_file(contents: &str, lang: &LangSlug) -> ParsedSolution {
     ParsedSolution {
         question_id: get_question_id(contents),
-        code: get_solution_code(contents),
+        lang: lang.clone(),
+        typed_code: get_solution_code(contents),
     }
 }
 

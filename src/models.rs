@@ -2,7 +2,7 @@
 // designed after the shape the GraphQL/REST responses return
 
 use crate::error::{LeetCodeError, Result};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::fmt;
 
@@ -11,7 +11,7 @@ pub const SOLUTION_MARKER: &str = "/* ---------- SOLUTION START ---------- */";
 /*
  * ========== LangSlug Model ==========
  */
-#[derive(PartialEq, Eq, Deserialize, Debug, Clone, clap::ValueEnum)]
+#[derive(PartialEq, Eq, Deserialize, Serialize, Debug, Clone, clap::ValueEnum)]
 #[serde(rename_all = "lowercase")]
 pub enum LangSlug {
     Cpp,
@@ -129,7 +129,7 @@ impl Question {
     }
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct CodeSnippet {
     pub lang: String,
@@ -197,6 +197,12 @@ pub struct SubmissionStatus {
     submission_id: String,              // present in all 7
     status_msg: String,                 // present in all 7
     state: String,                      // present in all 7
+}
+
+impl SubmissionStatus {
+    pub fn is_finished(&self) -> bool {
+        self.state == "SUCCESS"
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -320,6 +326,51 @@ impl From<SubmissionStatus> for SubmissionResult {
             other => SubmissionResult::Unknown(other as i64, s.status_msg),
         }
     }
+}
+
+#[derive(Deserialize, Debug)]
+pub struct RunResult {
+    // overall run info
+    pub status_code: u8,
+    pub status_msg: String,
+    pub state: String,
+    pub lang: LangSlug,
+    pub pretty_lang: String,
+    pub run_success: bool,
+    pub memory: u32,
+    pub status_memory: String,
+    pub status_runtime: String,
+    pub elapsed_time: u32,
+    pub total_correct: Option<u32>,
+    pub total_testcases: Option<u32>,
+    pub runtime_percentile: Option<f32>,
+    pub memory_percentile: Option<f32>,
+    pub submission_id: String,
+    pub task_finish_time: u64,
+    pub task_name: String,
+
+    // per-testcase results
+    pub code_answer: Vec<String>,
+    pub code_output: Vec<String>,
+    pub std_output_list: Vec<String>,
+    pub compare_result: String,
+    pub correct_answer: bool,
+
+    // expected per-testcase results, for comparison
+    pub expected_code_answer: Vec<String>,
+    pub expected_code_output: Vec<String>,
+    pub expected_std_output_list: Vec<String>,
+    pub expected_lang: String,
+    pub expected_run_success: bool,
+    pub expected_status_code: u8,
+    pub expected_status_runtime: String,
+    pub expected_display_runtime: String,
+    pub expected_elapsed_time: u32,
+    pub expected_memory: u32,
+    pub expected_task_finish_time: u64,
+    pub expected_task_name: String,
+
+    pub display_runtime: Option<String>,
 }
 
 /*
