@@ -22,6 +22,9 @@ pub enum LeetCodeError {
     #[error("failed to enact IO: {0}")]
     IO(#[from] std::io::Error),
 
+    #[error("failed to parse spec HTML: {0}")]
+    HtmlConversion(#[from] html_to_markdown_rs::ConversionError),
+
     /* Handrolled Errors */
     #[error("failed to create dir: {0}")]
     CargoInitFailed(String),
@@ -34,6 +37,9 @@ pub enum LeetCodeError {
 
     #[error("problem already pulled: use 'pull <slug> --force' for a hard reset")]
     AlreadyPulled(String),
+
+    #[error("html parse succeeded, but still had no content")]
+    NoMdContent,
 
     #[error("problem does not have a solution snippet for language: {0}")]
     UnsupportedLanguage(String),

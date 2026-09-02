@@ -6,6 +6,23 @@ use crate::{
     models::{LangSlug, Question, SOLUTION_MARKER},
 };
 
+pub fn generate_spec_file(question: &Question) -> Result<String> {
+    let supped = preprocess_sup_in_code(&question.content);
+    html_to_markdown_rs::convert(&supped, None)?
+        .content
+        .ok_or_else(|| LeetCodeError::NoMdContent)
+}
+
+fn preprocess_sup_in_code(html: &str) -> String {
+    // Move <sup> markup out of <code> spans before conversion, since the
+    // converter silently drops sup_symbol wrapping for anything nested
+    // inside <code>. Replace <sup>X</sup> with a literal "^X" *before*
+    // the <code> tag reaches the converter, so it's already plain text
+    // by the time <code> is processed.
+    let re = regex::Regex::new(r"<sup>(.*?)</sup>").unwrap();
+    re.replace_all(html, "^$1").to_string()
+}
+
 /*
  * helper function to transform a pulled object into a file
  */
@@ -83,5 +100,11 @@ pub fn get_challenge_dir(slug: &str) -> Result<PathBuf> {
 pub fn get_challenge_filepath(slug: &str, lang: &LangSlug) -> Result<PathBuf> {
     let challenge_dir = get_challenge_dir(slug)?;
     let challenge = format!("q.{ext}", ext = lang.file_extension());
+    Ok(challenge_dir.join(challenge))
+}
+
+pub fn get_spec_filepath(slug: &str) -> Result<PathBuf> {
+    let challenge_dir = get_challenge_dir(slug)?;
+    let challenge = format!("SPEC.md");
     Ok(challenge_dir.join(challenge))
 }
