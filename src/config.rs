@@ -1,34 +1,27 @@
 // load/save LEETCODE_SESSION + csrftoken from ~/.config/lt-cli/config.toml
 
-use std::{fs, path::PathBuf};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
 
 use crate::error::{LeetCodeError, Result};
 use serde::{Deserialize, Serialize};
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Default)]
 pub struct Config {
-    leetcode_session: Option<String>,
-    csrf_token: Option<String>,
+    pub leetcode_session: Option<String>,
+    pub csrf_token: Option<String>,
+    pub storage_path: Option<PathBuf>,
 }
 
 impl Config {
     pub fn load() -> Result<Self> {
-        let config_filepath = get_config_filepath()?;
-        let config_string = fs::read_to_string(&config_filepath)?;
-
-        Ok(toml::from_str::<Self>(&config_string)?)
+        Self::load_from(&Self::get_config_filepath()?)
     }
 
     pub fn save(&self) -> Result<()> {
-        let config_filepath = get_config_filepath()?;
-        let contents = toml::to_string(&self)?;
-
-        fs::create_dir_all(
-            &config_filepath
-                .parent()
-                .expect("No parent dir of config filepath"),
-        )?;
-        Ok(fs::write(config_filepath, contents)?)
+        self.save_to(&Self::get_config_filepath()?)
     }
 
     pub fn require_session(&self) -> Result<(&str, &str)> {
@@ -37,36 +30,58 @@ impl Config {
             _ => Err(LeetCodeError::NotAuthenticated),
         }
     }
-}
 
-fn get_config_filepath() -> Result<PathBuf> {
-    let config_dir = dirs::config_dir().ok_or_else(|| LeetCodeError::ConfigDir)?;
-    let config_filepath = config_dir.join("lc-cli/config.toml");
+    pub fn require_storage_dir(&self) -> Result<&Path> {
+        match &self.storage_path {
+            Some(path) => Ok(path),
+            None => Err(LeetCodeError::NoStorageDir),
+        }
+    }
 
-    Ok(config_filepath)
+    /* ===== HELPERS ===== */
+    fn get_config_filepath() -> Result<PathBuf> {
+        let config_dir = dirs::config_dir().ok_or_else(|| LeetCodeError::ConfigDir)?;
+        let config_filepath = config_dir.join("lc-cli/config.toml");
+
+        Ok(config_filepath)
+    }
+
+    fn load_from(path: &Path) -> Result<Self> {
+        let contents = fs::read_to_string(path)?;
+        Ok(toml::from_str(&contents)?)
+    }
+
+    fn save_to(&self, path: &Path) -> Result<()> {
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        fs::write(path, toml::to_string(self)?)?;
+        Ok(())
+    }
 }
 
 /*
  * ========== TESTING ==========
  */
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    // --- require_session: pure logic, no filesystem involved ---
+    fn sample_config() -> Config {
+        Config {
+            leetcode_session: Some("sess123".to_string()),
+            csrf_token: Some("csrf456".to_string()),
+            storage_path: Some(PathBuf::from("/tmp/some-storage-dir")),
+        }
+    }
+
     mod require_session_tests {
         use super::*;
 
         #[test]
         fn require_session_ok_when_both_present() {
-            let config = Config {
-                leetcode_session: Some("sess123".to_string()),
-                csrf_token: Some("csrf456".to_string()),
-            };
-            let result = config.require_session();
-            assert!(result.is_ok());
-            let (session, csrf) = result.unwrap();
+            let config = sample_config();
+            let (session, csrf) = config.require_session().unwrap();
             assert_eq!(session, "sess123");
             assert_eq!(csrf, "csrf456");
         }
@@ -75,7 +90,7 @@ mod tests {
         fn require_session_errors_when_session_missing() {
             let config = Config {
                 leetcode_session: None,
-                csrf_token: Some("csrf456".to_string()),
+                ..sample_config()
             };
             assert!(matches!(
                 config.require_session(),
@@ -86,8 +101,8 @@ mod tests {
         #[test]
         fn require_session_errors_when_csrf_missing() {
             let config = Config {
-                leetcode_session: Some("sess123".to_string()),
                 csrf_token: None,
+                ..sample_config()
             };
             assert!(matches!(
                 config.require_session(),
@@ -100,6 +115,7 @@ mod tests {
             let config = Config {
                 leetcode_session: None,
                 csrf_token: None,
+                ..sample_config()
             };
             assert!(matches!(
                 config.require_session(),
@@ -108,62 +124,75 @@ mod tests {
         }
     }
 
-    // --- TOML round-trip: no filesystem, just serialize then deserialize ---
+    mod require_storage_dir_tests {
+        use super::*;
+
+        #[test]
+        fn ok_when_present() {
+            let config = sample_config();
+            let path = config.require_storage_dir().unwrap();
+            assert_eq!(path, Path::new("/tmp/some-storage-dir"));
+        }
+
+        #[test]
+        fn errors_when_missing() {
+            let config = Config {
+                storage_path: None,
+                ..sample_config()
+            };
+            assert!(matches!(
+                config.require_storage_dir(),
+                Err(LeetCodeError::NoStorageDir)
+            ));
+        }
+    }
+
     mod toml_tests {
         use super::*;
 
         #[test]
         fn toml_round_trip_preserves_values() {
-            let original = Config {
-                leetcode_session: Some("sess123".to_string()),
-                csrf_token: Some("csrf456".to_string()),
-            };
+            let original = sample_config();
             let serialized = toml::to_string(&original).expect("serialize should succeed");
             let deserialized: Config =
                 toml::from_str(&serialized).expect("deserialize should succeed");
 
             assert_eq!(deserialized.leetcode_session, original.leetcode_session);
             assert_eq!(deserialized.csrf_token, original.csrf_token);
+            assert_eq!(deserialized.storage_path, original.storage_path);
         }
 
         #[test]
         fn toml_round_trip_handles_missing_fields() {
-            // Simulates a config.toml someone hand-wrote with only one field set
             let partial_toml = r#"leetcode_session = "only_this_one""#;
             let config: Config = toml::from_str(partial_toml).expect("should deserialize");
             assert_eq!(config.leetcode_session, Some("only_this_one".to_string()));
             assert_eq!(config.csrf_token, None);
+            assert_eq!(config.storage_path, None);
         }
     }
 
-    // --- load()/save(): real filesystem, but redirected to a temp dir ---
+    // --- load_from/save_to: real filesystem, but a temp path passed
+    // explicitly — never touches dirs::config_dir() or your real config,
+    // on any OS, unlike the old env-var-based version of this test.
     mod load_and_save_tests {
         use super::*;
 
         #[test]
         fn save_then_load_round_trips_through_real_disk() {
-            let temp_dir =
-                std::env::temp_dir().join(format!("leetcode-cli-test-{}", std::process::id()));
-            std::fs::create_dir_all(&temp_dir).expect("failed to create temp test dir");
+            let temp_path = std::env::temp_dir()
+                .join(format!("leetcode-cli-test-{}", std::process::id()))
+                .join("config.toml");
 
-            // SAFETY-ish note: this mutates process-wide env state for the
-            // duration of this test. Fine for a single-threaded test run;
-            // worth knowing if you ever see flaky failures under `cargo test`
-            // running suites in parallel.
-            unsafe { std::env::set_var("XDG_CONFIG_HOME", &temp_dir) }
-
-            let config = Config {
-                leetcode_session: Some("real_session".to_string()),
-                csrf_token: Some("real_csrf".to_string()),
-            };
-
-            config.save().expect("save should succeed");
-            let loaded = Config::load().expect("load should succeed");
+            let config = sample_config();
+            config.save_to(&temp_path).expect("save should succeed");
+            let loaded = Config::load_from(&temp_path).expect("load should succeed");
 
             assert_eq!(loaded.leetcode_session, config.leetcode_session);
             assert_eq!(loaded.csrf_token, config.csrf_token);
+            assert_eq!(loaded.storage_path, config.storage_path);
 
-            std::fs::remove_dir_all(&temp_dir).ok(); // best-effort cleanup
+            std::fs::remove_dir_all(temp_path.parent().unwrap()).ok();
         }
     }
 }

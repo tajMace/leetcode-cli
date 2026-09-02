@@ -6,6 +6,8 @@ use crate::commands::ParsedSolution;
 use crate::config::Config;
 use crate::error::{LeetCodeError, Result};
 use crate::models::{Question, RunResult, SubmissionResult, SubmissionStatus};
+use std::cell::RefCell;
+use std::time::{Duration, Instant};
 
 const LEETCODE_GRAPHQL_ENDPOINT: &str = "https://leetcode.com/graphql/";
 const FETCH_QUESTION_QUERY: &str = "query fetchProblem($titleSlug: String!) {
@@ -24,6 +26,7 @@ const FETCH_QUESTION_QUERY: &str = "query fetchProblem($titleSlug: String!) {
 pub struct LeetCodeClient {
     http: reqwest::blocking::Client,
     config: Config,
+    last_request: RefCell<Instant>,
 }
 
 impl LeetCodeClient {
@@ -31,6 +34,7 @@ impl LeetCodeClient {
         Ok(LeetCodeClient {
             http: reqwest::blocking::Client::new(),
             config: Config::load()?,
+            last_request: RefCell::new(Instant::now()),
         })
     }
 
@@ -40,6 +44,8 @@ impl LeetCodeClient {
         query: &str,
         variables: serde_json::Value,
     ) -> Result<serde_json::Value> {
+        self.rate_limit();
+
         let body = serde_json::json!({
             "query": query,
             "variables": variables,
@@ -116,6 +122,7 @@ impl LeetCodeClient {
     }
 
     fn start_judge(&self, slug: &str, path: &str, body: &serde_json::Value) -> Result<String> {
+        self.rate_limit();
         let referer = problem_referer(slug);
         let url = format!("{referer}/{path}/");
 
@@ -164,6 +171,16 @@ impl LeetCodeClient {
 
         // shouldn't get here: likely a hanging server issue
         Err(LeetCodeError::TestingTooLong)
+    }
+
+    fn rate_limit(&self) {
+        const MIN_INTERVAL: Duration = Duration::from_millis(500);
+        let mut last = self.last_request.borrow_mut();
+        let elapsed = last.elapsed();
+        if elapsed < MIN_INTERVAL {
+            std::thread::sleep(MIN_INTERVAL - elapsed);
+        }
+        *last = Instant::now();
     }
 }
 

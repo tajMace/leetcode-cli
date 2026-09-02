@@ -1,15 +1,15 @@
 // entrypoint — parse CLI args, load config, dispatch to commands::{pull,test,submit}
 
 mod cli;
-use clap::Parser;
-use cli::Cli;
-
 mod client;
 mod commands;
 mod config;
 mod error;
 mod manifest;
 mod models;
+
+use clap::Parser;
+use cli::Cli;
 
 fn main() {
     let cli = Cli::parse();
@@ -18,6 +18,7 @@ fn main() {
         cli::Command::Pull { slug, lang } => commands::pull(slug, lang),
         cli::Command::Test { slug, lang } => commands::test(&slug, &lang),
         cli::Command::Submit { slug, lang } => commands::submit(&slug, &lang),
+        cli::Command::Init { path } => commands::init(&path),
     };
 
     if let Err(e) = result {

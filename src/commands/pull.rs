@@ -11,9 +11,10 @@ use crate::{
 };
 
 pub fn pull(slug: String, lang: LangSlug) -> Result<()> {
-    let dirpath = get_challenge_dir(&slug);
-    let filepath = get_challenge_filepath(&slug, &lang);
+    let dirpath = get_challenge_dir(&slug)?;
+    let filepath = get_challenge_filepath(&slug, &lang)?;
 
+    // don't repull existing challenge
     if fs::exists(&filepath)? {
         return Ok(());
     };

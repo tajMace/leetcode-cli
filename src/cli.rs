@@ -1,5 +1,7 @@
 // clap arg definitions: `pull <slug>`, `test <slug>`, `submit <slug>`
 
+use std::path::PathBuf;
+
 use clap::{Parser, Subcommand};
 
 use crate::models::LangSlug;
@@ -20,6 +22,9 @@ pub enum Command {
         slug: String,
         #[arg(long, value_enum)]
         lang: LangSlug,
+    },
+    Init {
+        path: PathBuf,
     },
 }
 

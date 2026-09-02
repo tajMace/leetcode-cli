@@ -1,6 +1,7 @@
-use std::fs;
+use std::{fs, path::PathBuf};
 
 use crate::{
+    config::Config,
     error::{LeetCodeError, Result},
     models::{LangSlug, Question, SOLUTION_MARKER},
 };
@@ -37,7 +38,7 @@ pub struct ParsedSolution {
 }
 
 pub fn read_and_parse_solution_file(slug: &str, lang: &LangSlug) -> Result<ParsedSolution> {
-    let filepath = get_challenge_filepath(slug, lang);
+    let filepath = get_challenge_filepath(slug, lang)?;
     let contents = fs::read_to_string(filepath)?;
     Ok(parse_solution_file(&contents, lang))
 }
@@ -73,14 +74,14 @@ fn get_solution_code(contents: &str) -> String {
  * question filepath helper
  */
 
-pub fn get_challenge_dir(slug: &str) -> String {
-    format!("src/problems/{slug}")
+pub fn get_challenge_dir(slug: &str) -> Result<PathBuf> {
+    let config = Config::load()?;
+    let base_path = config.require_storage_dir()?;
+    Ok(base_path.join("src/problems").join(slug))
 }
 
-pub fn get_challenge_filepath(slug: &str, lang: &LangSlug) -> String {
-    format!(
-        "{dirpath}/q.{ext}",
-        dirpath = &get_challenge_dir(slug),
-        ext = lang.file_extension()
-    )
+pub fn get_challenge_filepath(slug: &str, lang: &LangSlug) -> Result<PathBuf> {
+    let challenge_dir = get_challenge_dir(slug)?;
+    let challenge = format!("q.{ext}", ext = lang.file_extension());
+    Ok(challenge_dir.join(challenge))
 }

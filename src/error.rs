@@ -23,6 +23,12 @@ pub enum LeetCodeError {
     IO(#[from] std::io::Error),
 
     /* Handrolled Errors */
+    #[error("failed to create dir: {0}")]
+    CargoInitFailed(String),
+
+    #[error("no storage directory initialised")]
+    NoStorageDir,
+
     #[error("failed to find config dir")]
     ConfigDir,
 

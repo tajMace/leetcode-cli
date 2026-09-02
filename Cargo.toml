@@ -1,6 +1,6 @@
 [[bin]]
-name = "two_sum"
-path = "src/problems/two-sum/q.rs"
+name = "lc-cli"
+path = "src/main.rs"
 
 [dependencies]
 dirs = "6.0.0"
@@ -25,7 +25,6 @@ check-cfg = ["cfg(coverage_nightly)"]
 level = "warn"
 
 [package]
-default-run = "leetcode-cli"
 edition = "2024"
 name = "leetcode-cli"
 version = "0.1.0"

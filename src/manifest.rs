@@ -1,7 +1,7 @@
 // provides an API to add [[bin]] entries to the Cargo.toml
 // allows for Rust verification in the IDE, without being in a /bin
 
-use crate::error::Result;
+use crate::{config::Config, error::Result};
 use std::fs;
 
 pub fn add_bin_entry(slug: &str) -> Result<()> {
@@ -11,7 +11,7 @@ pub fn add_bin_entry(slug: &str) -> Result<()> {
 
     if !bin_entry_exists(bin_array, &file_stem) {
         insert_to_bin_array(bin_array, &file_stem, slug);
-        fs::write("Cargo.toml", toml::to_string(&doc)?)?;
+        write_cargo_toml_contents(&doc)?;
     }
 
     Ok(())
@@ -20,7 +20,9 @@ pub fn add_bin_entry(slug: &str) -> Result<()> {
 /* ========== LOCAL HELPERS ========== */
 
 fn get_cargo_toml_contents() -> Result<toml::Table> {
-    let contents = fs::read_to_string("Cargo.toml")?;
+    let config = Config::load()?;
+    let config_file = config.require_storage_dir()?.join("Cargo.toml");
+    let contents = fs::read_to_string(config_file)?;
     Ok(toml::from_str(&contents)?)
 }
 
@@ -50,6 +52,12 @@ fn insert_to_bin_array(bin_array: &mut Vec<toml::Value>, file_stem: &str, slug: 
     bin_array.push(toml::Value::Table(new_entry));
 }
 
+fn write_cargo_toml_contents(doc: &toml::Table) -> Result<()> {
+    let config = Config::load()?;
+    let config_file = config.require_storage_dir()?.join("Cargo.toml");
+    Ok(fs::write(config_file, toml::to_string(&doc)?)?)
+}
+
 /*
  * =========== UNIT TESTS ==========
  */
@@ -69,18 +77,15 @@ mod tests {
     #[test]
     fn bin_entry_exists_finds_matching_name() {
         let entries = vec![
-            sample_entry("two_sum", "src/problems/two-sum/rust.rs"),
-            sample_entry(
-                "valid_parentheses",
-                "src/problems/valid-parentheses/rust.rs",
-            ),
+            sample_entry("two_sum", "src/problems/two-sum/q.rs"),
+            sample_entry("valid_parentheses", "src/problems/valid-parentheses/q.rs"),
         ];
         assert!(bin_entry_exists(&entries, "two_sum"));
     }
 
     #[test]
     fn bin_entry_exists_returns_false_when_absent() {
-        let entries = vec![sample_entry("two_sum", "src/problems/two-sum/rust.rs")];
+        let entries = vec![sample_entry("two_sum", "src/problems/two-sum/q.rs")];
         assert!(!bin_entry_exists(&entries, "three_sum"));
     }
 
@@ -113,12 +118,12 @@ mod tests {
         let name = entries[0].get("name").and_then(|v| v.as_str());
         let path = entries[0].get("path").and_then(|v| v.as_str());
         assert_eq!(name, Some("two_sum"));
-        assert_eq!(path, Some("src/problems/two-sum/rust.rs"));
+        assert_eq!(path, Some("src/problems/two-sum/q.rs"));
     }
 
     #[test]
     fn insert_to_bin_array_appends_without_removing_existing() {
-        let mut entries = vec![sample_entry("existing", "src/problems/existing/rust.rs")];
+        let mut entries = vec![sample_entry("existing", "src/problems/existing/q.rs")];
         insert_to_bin_array(&mut entries, "two_sum", "two-sum");
 
         assert_eq!(entries.len(), 2);
