@@ -1,4 +1,4 @@
-// entrypoint — parse CLI args, load config, dispatch to commands::{pull,test,submit}
+// entrypoint — parse CLI args, load config, dispatch to commands
 
 mod cli;
 mod client;
@@ -19,6 +19,7 @@ fn main() {
         cli::Command::Test { slug, lang } => commands::test(&slug, &lang),
         cli::Command::Submit { slug, lang } => commands::submit(&slug, &lang),
         cli::Command::Init { path } => commands::init(&path),
+        cli::Command::Login => commands::login(),
     };
 
     if let Err(e) = result {

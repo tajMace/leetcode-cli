@@ -25,11 +25,14 @@ pub enum LeetCodeError {
     #[error("failed to parse spec HTML: {0}")]
     HtmlConversion(#[from] html_to_markdown_rs::ConversionError),
 
+    #[error("failed to read browser cookies: {0}")]
+    CookieExtraction(#[from] eyre::Report),
+
     /* Handrolled Errors */
     #[error("failed to create dir: {0}")]
     CargoInitFailed(String),
 
-    #[error("no storage directory initialised")]
+    #[error("no storage directory initialised: use 'init' command to setup an lc-cli directory")]
     NoStorageDir,
 
     #[error("failed to find config dir")]
@@ -47,9 +50,12 @@ pub enum LeetCodeError {
     #[error("Took too long waiting for testcases to complete")]
     TestingTooLong,
 
+    #[error("Not logged into LeetCode: follow the login command instructions")]
+    NotLoggedIn,
+
     /* Status Error Series */
     // 401/403
-    #[error("failed to authenticate token")]
+    #[error("failed to authenticate token: use 'login' command to refresh saved tokens")]
     NotAuthenticated,
 
     // 404

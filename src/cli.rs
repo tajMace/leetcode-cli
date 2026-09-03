@@ -26,6 +26,7 @@ pub enum Command {
     Init {
         path: PathBuf,
     },
+    Login,
 }
 
 #[derive(Debug, Parser)]
