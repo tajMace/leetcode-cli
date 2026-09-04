@@ -1,7 +1,5 @@
 // crate-wide error enum (thiserror or hand-rolled)
 
-use std::fs;
-
 pub type Result<T> = std::result::Result<T, LeetCodeError>;
 
 #[derive(thiserror::Error, Debug)]
@@ -38,6 +36,9 @@ pub enum LeetCodeError {
     #[error("failed to find config dir")]
     ConfigDir,
 
+    #[error("failed to find cache dir")]
+    CacheDir,
+
     #[error("problem already pulled: use 'pull <slug> --force' for a hard reset")]
     AlreadyPulled(String),
 
@@ -52,6 +53,9 @@ pub enum LeetCodeError {
 
     #[error("Not logged into LeetCode: follow the login command instructions")]
     NotLoggedIn,
+
+    #[error("Response in an unexpected format: {0}")]
+    MalformedResponse(String),
 
     /* Status Error Series */
     // 401/403

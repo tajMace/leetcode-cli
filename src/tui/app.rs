@@ -1,0 +1,90 @@
+// ratatui app runner
+
+use clap::ValueEnum;
+
+use crate::{
+    cache::{self, load_cached_problem_list},
+    commands,
+    error::Result,
+    models::{LangSlug, ProblemSummary},
+    tui::app::Mode::ProblemList,
+};
+
+#[derive(PartialEq)]
+pub enum Mode {
+    ProblemList,
+    LanguageSelect,
+}
+
+pub struct App {
+    // problem (meta)data
+    pub problems: Vec<ProblemSummary>,
+    pub problem_selected: usize,
+    pub should_quit: bool,
+
+    // lang dropdown (meta)data
+    pub mode: Mode,
+    pub lang_options: Vec<LangSlug>,
+    pub lang_selected: usize,
+}
+
+impl App {
+    pub fn new(problems: Vec<ProblemSummary>) -> Self {
+        Self {
+            problems,
+            problem_selected: 0,
+            should_quit: false,
+
+            mode: ProblemList,
+            lang_options: LangSlug::value_variants().to_vec(),
+            lang_selected: 0,
+        }
+    }
+
+    pub fn quit(&mut self) {
+        self.should_quit = true;
+    }
+
+    /* ===== PROBLEM MENU ===== */
+    pub fn select_next_problem(&mut self) {
+        self.problem_selected = (self.problem_selected + 1) % self.problems.len();
+    }
+
+    pub fn select_previous_problem(&mut self) {
+        self.problem_selected =
+            (self.problem_selected + self.problems.len() - 1) % self.problems.len();
+    }
+
+    pub fn pull_selected_problem(&mut self) -> Result<()> {
+        let slug = self.problems[self.problem_selected].title_slug.clone();
+        commands::pull(slug, self.lang_options[self.lang_selected])?;
+        self.close_language_selection();
+
+        Ok(())
+    }
+
+    pub fn pull_problem_list(&mut self) -> Result<()> {
+        cache::download_and_save_problem_list()?;
+        self.problems = load_cached_problem_list()?;
+
+        Ok(())
+    }
+
+    /* ===== LANG MENU ===== */
+    pub fn open_language_selection(&mut self) {
+        self.mode = Mode::LanguageSelect;
+    }
+
+    pub fn select_next_lang(&mut self) {
+        self.lang_selected = (self.lang_selected + 1) % self.lang_options.len();
+    }
+
+    pub fn select_previous_lang(&mut self) {
+        self.lang_selected =
+            (self.lang_selected + self.lang_options.len() - 1) % self.lang_options.len();
+    }
+
+    pub fn close_language_selection(&mut self) {
+        self.mode = Mode::ProblemList;
+    }
+}

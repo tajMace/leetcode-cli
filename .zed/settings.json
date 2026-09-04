@@ -1,0 +1,6 @@
+{
+  "colorize_brackets": false,
+  "format_on_save": "on",
+  "allow_rewrap": "anywhere",
+  "soft_wrap": "prefer_line"
+}

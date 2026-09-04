@@ -11,7 +11,7 @@ pub const SOLUTION_MARKER: &str = "/* ---------- SOLUTION START ---------- */";
 /*
  * ========== LangSlug Model ==========
  */
-#[derive(PartialEq, Eq, Deserialize, Serialize, Debug, Clone, clap::ValueEnum)]
+#[derive(PartialEq, Eq, Deserialize, Serialize, Debug, Clone, Copy, clap::ValueEnum)]
 #[serde(rename_all = "lowercase")]
 pub enum LangSlug {
     Cpp,
@@ -96,9 +96,9 @@ impl fmt::Display for LangSlug {
 /*
  * ========== QUESTION MODEL ==========
  */
-#[derive(Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
-pub struct Question {
+pub struct Problem {
     pub question_id: String,
     pub question_frontend_id: String,
     pub title: String,
@@ -109,7 +109,7 @@ pub struct Question {
     pub example_testcase_list: Vec<String>,
 }
 
-impl Question {
+impl Problem {
     pub fn from_graphql_value(root: &Value, slug: &str) -> Result<Self> {
         let question_json = root
             .get("data")
@@ -137,10 +137,41 @@ pub struct CodeSnippet {
     pub code: String,
 }
 
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProblemSummary {
+    #[serde(rename = "frontendQuestionId")]
+    pub id: String,
+    pub title: String,
+    pub title_slug: String,
+    pub difficulty: Difficulty,
+    pub status: Option<String>,
+}
+
+impl ProblemSummary {
+    pub fn list_from_graphql_value(raw: &Value) -> Result<Vec<ProblemSummary>> {
+        let questions_json = raw
+            .get("data")
+            .and_then(|d| d.get("problemsetQuestionList"))
+            .and_then(|l| l.get("questions"))
+            .ok_or_else(|| {
+                LeetCodeError::MalformedResponse(
+                    "expected data.problemsetQuestionList.questions".to_string(),
+                )
+            })?;
+
+        Ok(serde_json::from_value(questions_json.clone())?)
+    }
+
+    pub fn solved(&self) -> bool {
+        self.status.as_deref() == Some("ac")
+    }
+}
+
 /*
  * ========== Difficulty Model ==========
  */
-#[derive(PartialEq, Eq, Deserialize, Debug)]
+#[derive(PartialEq, Eq, Serialize, Deserialize, Debug)]
 pub enum Difficulty {
     Easy,
     Medium,
@@ -400,7 +431,7 @@ mod tests {
                 let json_payload =
                     include_str!("../test_data/response_samples/two_sum_response.json");
 
-                let question = Question::from_graphql_payload(json_payload, "two-sum")?;
+                let question = Problem::from_graphql_payload(json_payload, "two-sum")?;
                 assert_eq!(question.question_frontend_id, "1");
                 assert_eq!(question.title, "Two Sum");
                 assert_eq!(question.difficulty, Difficulty::Easy);
@@ -421,7 +452,7 @@ mod tests {
             fn returns_none_for_missing_language() -> Result<()> {
                 let json_payload =
                     include_str!("../test_data/response_samples/two_sum_response.json");
-                let _ = Question::from_graphql_payload(json_payload, "two-sum")?;
+                let _ = Problem::from_graphql_payload(json_payload, "two-sum")?;
 
                 // tests that a language not included in the output does not crash the system
                 // possible on newer problems that don't yet support niche languages
@@ -432,7 +463,7 @@ mod tests {
             #[test]
             fn fails_on_malformed_json_syntax() {
                 let bad_json = "{ this is not valid json";
-                let result = Question::from_graphql_payload(bad_json, "two-sum");
+                let result = Problem::from_graphql_payload(bad_json, "two-sum");
 
                 // asserts that the first `?` operator correctly caught the error
                 assert!(result.is_err(), "Expected an error for malformed JSON");
@@ -450,7 +481,7 @@ mod tests {
                         }
                     }
                 }"#;
-                let result = Question::from_graphql_payload(bad_schema_json, "two-sum");
+                let result = Problem::from_graphql_payload(bad_schema_json, "two-sum");
 
                 assert!(
                     result.is_err(),
@@ -464,7 +495,7 @@ mod tests {
                 // worth its own test since it's a distinct code path from
                 // both malformed JSON and missing-fields
                 let null_question_json = r#"{ "data": { "question": null } }"#;
-                let result = Question::from_graphql_payload(null_question_json, "fake-slug");
+                let result = Problem::from_graphql_payload(null_question_json, "fake-slug");
 
                 match result {
                     Err(LeetCodeError::ProblemNotFound(slug)) => {

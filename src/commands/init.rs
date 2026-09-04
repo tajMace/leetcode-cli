@@ -1,20 +1,28 @@
 // command to initialise a leetcode directory at the current level
 
 use crate::{
+    cache::{self},
     config::Config,
     error::{LeetCodeError::CargoInitFailed, Result},
 };
-use std::{fs::create_dir_all, path::Path, process::Command};
+use std::{
+    fs::create_dir_all,
+    path::{Path, PathBuf},
+    process::Command,
+};
 
 /// initialises a storage directory for leetcode problems + solutions
 /// will happily reinitialise to a new dir: renders the old directory dead
-pub fn init(path: &Path) -> Result<()> {
+pub fn init(path: PathBuf) -> Result<()> {
     let relative_path = path.join("leetcode");
     create_storage_directory(&relative_path)?;
 
     let storage_path = relative_path.canonicalize()?;
     initialise_cargo_package(&storage_path)?;
     save_storage_path_to_config(&storage_path)?;
+
+    cache::download_and_save_problem_list()?;
+
     Ok(())
 }
 

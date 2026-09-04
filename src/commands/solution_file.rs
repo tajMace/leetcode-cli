@@ -3,10 +3,10 @@ use std::{fs, path::PathBuf};
 use crate::{
     config::Config,
     error::{LeetCodeError, Result},
-    models::{LangSlug, Question, SOLUTION_MARKER},
+    models::{LangSlug, Problem, SOLUTION_MARKER},
 };
 
-pub fn generate_spec_file(question: &Question) -> Result<String> {
+pub fn generate_spec_file(question: &Problem) -> Result<String> {
     let supped = preprocess_sup_in_code(&question.content);
     html_to_markdown_rs::convert(&supped, None)?
         .content
@@ -26,7 +26,7 @@ fn preprocess_sup_in_code(html: &str) -> String {
 /*
  * helper function to transform a pulled object into a file
  */
-pub fn generate_problem_file(question: &Question, lang: &LangSlug) -> Result<String> {
+pub fn generate_problem_file(question: &Problem, lang: &LangSlug) -> Result<String> {
     let snippet = question
         .lang_snippet(lang)
         .ok_or_else(|| LeetCodeError::UnsupportedLanguage(lang.as_str().to_string()))?;

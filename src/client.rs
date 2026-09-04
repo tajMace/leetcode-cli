@@ -5,7 +5,7 @@
 use crate::commands::ParsedSolution;
 use crate::config::Config;
 use crate::error::{LeetCodeError, Result};
-use crate::models::{Question, RunResult, SubmissionResult, SubmissionStatus};
+use crate::models::{Problem, ProblemSummary, RunResult, SubmissionResult, SubmissionStatus};
 use std::cell::RefCell;
 use std::time::{Duration, Instant};
 
@@ -20,6 +20,23 @@ const FETCH_QUESTION_QUERY: &str = "query fetchProblem($titleSlug: String!) {
     content
     codeSnippets { lang langSlug code }
     exampleTestcaseList
+  }
+}";
+const PROBLEM_LIST_QUERY: &str = "query problemsetQuestionList($categorySlug: String, $limit: Int, $skip: Int, $filters: QuestionListFilterInput) {
+  problemsetQuestionList: questionList(
+    categorySlug: $categorySlug
+    limit: $limit
+    skip: $skip
+    filters: $filters
+  ) {
+    total: totalNum
+    questions: data {
+      difficulty
+      frontendQuestionId: questionFrontendId
+      status
+      title
+      titleSlug
+    }
   }
 }";
 
@@ -52,20 +69,22 @@ impl LeetCodeClient {
         });
 
         Ok(self
-            .http
-            .post(LEETCODE_GRAPHQL_ENDPOINT)
+            .with_auth_headers(
+                self.http.post(LEETCODE_GRAPHQL_ENDPOINT),
+                LEETCODE_GRAPHQL_ENDPOINT,
+            )?
             .json(&body)
             .send()?
             .json()?)
     }
 
-    pub fn fetch_question(&self, slug: &str) -> Result<Question> {
+    pub fn fetch_question(&self, slug: &str) -> Result<Problem> {
         let query = FETCH_QUESTION_QUERY;
         let variables = serde_json::json!({
             "titleSlug": slug
         });
         let ret = self.query_graphql(query, variables)?;
-        Ok(Question::from_graphql_value(&ret, slug)?)
+        Ok(Problem::from_graphql_value(&ret, slug)?)
     }
 
     /// Runs a solution against a problem's visible example testcases via
@@ -73,7 +92,7 @@ impl LeetCodeClient {
     /// real submission)
     pub fn run_testcases(
         &self,
-        question: &Question,
+        question: &Problem,
         solution: &ParsedSolution,
     ) -> Result<RunResult> {
         let slug = &question.title_slug;
@@ -90,7 +109,7 @@ impl LeetCodeClient {
 
     pub fn submit_solution(
         &self,
-        question: &Question,
+        question: &Problem,
         solution: &ParsedSolution,
     ) -> Result<SubmissionResult> {
         let slug = &question.title_slug;
@@ -103,6 +122,39 @@ impl LeetCodeClient {
         let submission_id = self.start_judge(slug, "submit", &body)?;
         let status = self.poll_until_judgement::<SubmissionStatus>(&submission_id, slug)?;
         Ok(status.into())
+    }
+
+    pub fn fetch_problem_list(&self) -> Result<Vec<ProblemSummary>> {
+        const PROBLEM_PAGE_SIZE: i32 = 100;
+
+        let mut all_problems = Vec::new();
+        let mut skip = 0;
+
+        loop {
+            let page = self.fetch_problem_page(skip, PROBLEM_PAGE_SIZE)?;
+            let page_len = page.len();
+            all_problems.extend(page);
+
+            if page_len < PROBLEM_PAGE_SIZE as usize {
+                break;
+            }
+            skip += PROBLEM_PAGE_SIZE;
+        }
+
+        Ok(all_problems)
+    }
+
+    pub fn fetch_problem_page(&self, skip: i32, limit: i32) -> Result<Vec<ProblemSummary>> {
+        let variables = serde_json::json!({
+            "categorySlug": "",
+            "skip": skip,
+            "limit": limit,
+            "filters": {}
+        });
+
+        let raw = self.query_graphql(PROBLEM_LIST_QUERY, variables)?;
+
+        Ok(ProblemSummary::list_from_graphql_value(&raw)?)
     }
 
     /* ----- private helpers ----- */
@@ -211,7 +263,7 @@ mod client_tests {
         LeetCodeClient::new().expect("client should construct")
     }
 
-    fn two_sum_question(client: &LeetCodeClient) -> Question {
+    fn two_sum_question(client: &LeetCodeClient) -> Problem {
         client
             .fetch_question("two-sum")
             .expect("should fetch two-sum")
@@ -318,7 +370,7 @@ mod submit_tests {
         LeetCodeClient::new().expect("client should construct")
     }
 
-    fn two_sum_question(client: &LeetCodeClient) -> Question {
+    fn two_sum_question(client: &LeetCodeClient) -> Problem {
         client
             .fetch_question("two-sum")
             .expect("should fetch two-sum")
